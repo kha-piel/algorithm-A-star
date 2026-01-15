@@ -1,0 +1,130 @@
+import java.util.*;
+
+public class AStarPathfinding {
+
+    static class Node implements Comparable<Node> {
+        double lat, lng;
+        double g, h, f;
+        Node parent;
+
+        public Node(double lat, double lng) {
+            this.lat = lat;
+            this.lng = lng;
+        }
+
+        @Override
+        public int compareTo(Node other) {
+            return Double.compare(this.f, other.f);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Node node = (Node) o;
+            return Math.abs(node.lat - lat) < 0.0001 && Math.abs(node.lng - lng) < 0.0001;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(Math.round(lat * 10000), Math.round(lng * 10000));
+        }
+    }
+
+    // Tính khoảng cách Haversine giữa 2 điểm (lat/lng)
+    public static double haversineDistance(double lat1, double lng1, double lat2, double lng2) {
+        double R = 6371; // km
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                   Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    // A* Algorithm
+    public static List<Node> findPath(Node start, Node goal, List<Node> obstacles) {
+        PriorityQueue<Node> openSet = new PriorityQueue<>();
+        Set<Node> closedSet = new HashSet<>();
+        Map<Node, Double> gScore = new HashMap<>();
+        
+        start.g = 0;
+        start.h = haversineDistance(start.lat, start.lng, goal.lat, goal.lng);
+        start.f = start.h;
+        openSet.add(start);
+        gScore.put(start, 0.0);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+
+            if (current.equals(goal)) {
+                return reconstructPath(current);
+            }
+
+            closedSet.add(current);
+
+            List<Node> neighbors = getNeighbors(current, goal, obstacles);
+            for (Node neighbor : neighbors) {
+                if (closedSet.contains(neighbor)) continue;
+
+                double distance = haversineDistance(current.lat, current.lng, neighbor.lat, neighbor.lng);
+                double tentativeG = gScore.get(current) + distance;
+
+                if (!gScore.containsKey(neighbor) || tentativeG < gScore.get(neighbor)) {
+                    neighbor.parent = current;
+                    neighbor.g = tentativeG;
+                    neighbor.h = haversineDistance(neighbor.lat, neighbor.lng, goal.lat, goal.lng);
+                    neighbor.f = neighbor.g + neighbor.h;
+                    gScore.put(neighbor, tentativeG);
+                    
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                }
+            }
+        }
+
+        return new ArrayList<>(); // No path found
+    }
+
+    private static List<Node> getNeighbors(Node current, Node goal, List<Node> obstacles) {
+        List<Node> neighbors = new ArrayList<>();
+        double step = 0.001; // ~100 meters
+        
+        // 8 directions
+        double[][] directions = {
+            {step, 0}, {-step, 0}, {0, step}, {0, -step},
+            {step, step}, {step, -step}, {-step, step}, {-step, -step}
+        };
+
+        for (double[] dir : directions) {
+            double newLat = current.lat + dir[0];
+            double newLng = current.lng + dir[1];
+            
+            if (!isBlocked(newLat, newLng, obstacles)) {
+                neighbors.add(new Node(newLat, newLng));
+            }
+        }
+
+        return neighbors;
+    }
+
+    private static boolean isBlocked(double lat, double lng, List<Node> obstacles) {
+        for (Node obstacle : obstacles) {
+            if (haversineDistance(lat, lng, obstacle.lat, obstacle.lng) < 0.05) { // 50m radius
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<Node> reconstructPath(Node node) {
+        List<Node> path = new ArrayList<>();
+        while (node != null) {
+            path.add(0, node);
+            node = node.parent;
+        }
+        return path;
+    }
+}
